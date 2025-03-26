@@ -1,324 +1,88 @@
 import pygame
 import json
 
-from time import sleep
-from typing import Any, Callable
-
-from PyQt6.QtWidgets import QApplication, QInputDialog, QLineEdit, QMessageBox
+from PyQt6.QtWidgets import QApplication, QFileDialog
 
 # import pygame
 import sys
+from sokoban import Sokoban
 
-from game_objects import *
-
-TIMEREVENT = pygame.USEREVENT + 1
-
-
-class Cursor(pygame.sprite.Sprite):
-    def __init__(self, *groups):
-        super().__init__(*groups)
-        self.rect = pygame.Rect(0, 0, 1, 1)
-        self.last_collided = None
-
-    def set_pos(self, x, y):
-        self.rect = pygame.Rect(x, y, 1, 1)
+from controls import *
 
 
-class Static(pygame.sprite.Sprite):
-    def __init__(self, x, y, *groups, text="", colors=((0, 0, 0), (255, 255, 255))):
-        super().__init__(*groups)
-        self.text = text
-        self.tx_color, self.bg_color = colors
-        self.image = pygame.font.Font(None, 36).render(text, True, self.tx_color, self.bg_color)
-        self.rect = self.image.get_rect().move(x, y)
+class Menu:
+    TIMEREVENT = pygame.USEREVENT + 1
 
-    def set_text(self, text):
-        x, y, *_ = self.rect
-        self.text = text
-        self.image = pygame.font.Font(None, 36).render(text, True, self.tx_color, self.bg_color)
-        self.rect = self.image.get_rect().move(x, y)
-
-    def set_colors(self, colors):
-        self.tx_color, self.bg_color = colors
-        self.image = pygame.font.Font(None, 36).render(self.text, True, *colors)
-
-    def set_bg_color(self, color):
-        self.bg_color = color
-        self.image = pygame.font.Font(None, 36).render(self.text, True, self.tx_color, self.bg_color)
-
-    def set_tx_color(self, color):
-        self.tx_color = color
-        self.image = pygame.font.Font(None, 36).render(self.text, True, self.tx_color, self.bg_color)
-
-    def set_pos(self, x, y):
-        self.rect = pygame.Rect(x, y, self.rect.width, self.rect.height)
-
-
-class Button(Static):
-
-    def on_cursor(self):
-        if (self.bg_color, self.tx_color) != self.active_colors:
-            self.set_colors(self.active_colors)
-
-    def off_cursor(self):
-        if (self.bg_color, self.tx_color) != self.base_colors:
-            self.set_colors(self.base_colors)
-
-    def __init__(self, x, y, *groups,
-                 text="",
-                 base_colors=((0, 0, 0), (255, 255, 255)),
-                 on_click: Callable[[Any, Any, Any], Any] = lambda _self, parent, event: None,
-                 active_colors=((255, 255, 255), (0, 0, 0))
-                 ):
-        self.click = on_click
-        super().__init__(x, y, *groups, text=text, colors=base_colors)
-        self.base_colors = base_colors
-        self.active_colors = active_colors
-
-
-class Sokoban:
-
-    def __init__(self, size, background, point_size, points_count=10):
+    def __init__(self, size, background, screen, text_size=30, base_colors=((255, 255, 255), (0, 0, 0)),
+                 active_colors=((0, 0, 0), (255, 255, 255))):
         self.size = size
         self.background = background
-        self.point_size = point_size
-        self.points_count = points_count
-        self.cell_len = point_size * points_count
-        self.level = None
-
-        self.images = {
-            "X": pygame.image.load("data/wall.png"),  # wall
-            "@": pygame.image.load("data/hero.png"),  # hero
-            " ": pygame.image.load("data/ground.png"),  # void cell
-            ".": pygame.image.load("data/place.png"),  # place for box
-            "*": pygame.image.load("data/box.png")  # box
-        }
-        for i in self.images:
-            self.images[i] = pygame.transform.scale(self.images[i], (self.cell_len, self.cell_len))
-            self.images[i].set_colorkey((255, 255, 255))
-        self.hero_image_angles = {
-            (-1, 0): self.images["@"],
-            (0, 1): pygame.transform.rotate(self.images["@"], 90),
-            (1, 0): pygame.transform.rotate(self.images["@"], 180),
-            (0, -1): pygame.transform.rotate(self.images["@"], 270),
-        }
-        for i in self.hero_image_angles.values():
-            i.set_colorkey((255, 255, 255))
         self.running = True
-        self.screen = pygame.display.set_mode(size)
+        self.screen = screen
         self.screen.fill(background)
-        self.all_group = pygame.sprite.Group()
-        self.tiles_group = pygame.sprite.Group()
-        self.hero_group = pygame.sprite.Group()
-        self.walls_group = pygame.sprite.Group()
-        self.places_group = pygame.sprite.Group()
-        self.boxes_group = pygame.sprite.Group()
 
         self.controls_group = pygame.sprite.Group()
         self.cursor_group = pygame.sprite.Group()
-        self.static_group = pygame.sprite.Group()
+        # self.static_group = pygame.sprite.Group()
         self.buttons_group = pygame.sprite.Group()
 
         self.cursor = Cursor(self.cursor_group)
-        self.info_static = Static(0, 0, self.controls_group, self.static_group)
-        # self.button_back.set_pos(self.size[0] - self.button_back.rect.width, 0)
 
-        self.button_restart = Button(
+        last_y_pos = 250
+        self.button_start = Button(
             0, 0,
             self.controls_group, self.buttons_group,
-            text="Restart",
-            base_colors=((255, 0, 0), (0, 255, 0)),
+            text="Play",
+            base_colors=base_colors,
+            active_colors=active_colors,
+            text_size=text_size,
             on_click=lambda _self, parent, event: (
-                parent.clear(),
-                parent.load_level(parent.level)
+                setattr(parent, "running", False)
             )
         )
-        last_x_pos = 0
-        last_x_pos += self.button_restart.rect.width
-        self.button_restart.set_pos(self.size[0] - last_x_pos, 0)
 
-        def button_forward(button, game, event):
-            if isinstance(game.level, int):
-                with open("data/levels/max_level", "r+") as file_level:
-                    max_user_level = int(file_level.readline().rstrip("\n"))
-                    if self.level < max_user_level:
-                        game.clear()
-                        game.level += 1
-                        game.load_level(game.level)
+        self.button_start.set_pos((self.size[0] - self.button_start.rect.width) // 2, last_y_pos)
+        last_y_pos += self.button_start.rect.height
 
-        self.button_forward = Button(
+        self.button_load = Button(
             0, 0,
             self.controls_group, self.buttons_group,
-            text=" > ",
-            base_colors=((255, 0, 0), (0, 255, 0)),
-            on_click=button_forward
+            text="Load",
+            base_colors=base_colors,
+            active_colors=active_colors,
+            text_size=text_size,
+            on_click=lambda _self, parent, event: (
+                _path := QFileDialog.getOpenFileName(None, 'Open File', '', 'All Files (*)')[0],
+                (setattr(parent, "running", False), setattr(parent, "retval", _path)) if _path else None
+            )
         )
-        last_x_pos += self.button_forward.rect.width + 3
-        self.button_forward.set_pos(self.size[0] - last_x_pos, 0)
 
-        def button_click_back(button, game: Sokoban, event):
-            # print(game.level)
-            if isinstance(game.level, int) and game.level > 1:
-                game.clear()
-                game.level -= 1
-                game.load_level(game.level)
+        last_y_pos += 20
+        self.button_load.set_pos((self.size[0] - self.button_load.rect.width) // 2, last_y_pos)
+        last_y_pos += self.button_load.rect.height
 
-        self.button_back = Button(
+        self.button_close = Button(
             0, 0,
             self.controls_group, self.buttons_group,
-            text=" < ",
-            base_colors=((255, 0, 0), (0, 255, 0)),
-            on_click=button_click_back
+            text="Close",
+            base_colors=base_colors,
+            active_colors=active_colors,
+            text_size=text_size,
+            on_click=lambda _self, parent, event: (
+                setattr(parent, "running", False),
+                setattr(parent, "retval", "Quit")
+            )
         )
-        last_x_pos += self.button_back.rect.width + 3
-        self.button_back.set_pos(self.size[0] - last_x_pos, 0)
 
-        self.button_menu = Button(
-            0, 0,
-            self.controls_group, self.buttons_group,
-            text="Menu",
-            base_colors=((255, 0, 0), (0, 255, 0))  # ,
-            # on_click=lambda _self, parent, event: (
-            #     parent.clear(),
-            #     parent.load_level(parent.level)
-            # )
-        )
-        last_x_pos += self.button_menu.rect.width + 3
-        self.button_menu.set_pos(self.size[0] - last_x_pos, 0)
+        last_y_pos += 20
+        self.button_close.set_pos((self.size[0] - self.button_close.rect.width) // 2, last_y_pos)
+        last_y_pos += self.button_close.rect.height
 
-        self.hero = None
-        self.tiles = []
-        self.walls = []
-        self.places = []
-        self.boxes = []
-
-        self.__retval = True
-        self.timer_direction = None
-        self.move_objects = []
-        self.timer_steps = 0
-        self.steps_direction = None
-
-    items_dict = {
-        " ": lambda _self, *args: _self.tiles.append(Tile(*args, _self.tiles_group)),
-        "X": lambda _self, *args: _self.tiles.append(Wall(*args, _self.walls_group)),
-        ".": lambda _self, *args: _self.tiles.append(Place(*args, _self.places_group)),
-        "*": lambda _self, *args: (_self.tiles.append(Box(*args, _self.boxes_group))),
-        "@": lambda _self, *args: (
-            setattr(_self, "hero", Hero(*args, _self.hero_group)),
-            setattr(getattr(_self, "hero"), "camera", Camera(getattr(_self, "size")))
-        )
-    }
-
-    def load_level(self, level: str | int):
-        if isinstance(level, int):
-            fname = f"data/levels/level{level}.txt"
-        else:
-            fname = level
-        with open(fname) as level_file:
-            items_dict = {"X": [], " ": [], ".": [], "*": [], "@": []}
-            lines_file = list(map(str.rstrip, level_file.readlines()))
-            max_len = max(map(len, lines_file))
-            for i, line in enumerate(lines_file):
-                for j, smb in enumerate(line.rstrip("\n") + " " * (max_len - len(line))):
-                    items_dict[smb].append((j * self.cell_len, i * self.cell_len))
-                    if smb != "X" and smb != ".":
-                        items_dict[" "].append((j * self.cell_len, i * self.cell_len))
-            for key, value in items_dict.items():
-                for x, y in value:
-                    handler = self.items_dict.get(key, lambda *args: None)
-                    handler(self, x, y, self.images[key], self.all_group)
-        self.info_static.set_text(f"Level: {self.level}, Boxes: 0/{len(self.boxes_group)}")
-
-    def clear(self):
-        self.all_group.empty()
-        self.tiles_group.empty()
-        self.walls_group.empty()
-        self.boxes_group.empty()
-        self.places_group.empty()
-        self.hero_group.empty()
-        self.hero = None
-        self.tiles.clear()
-        self.walls.clear()
-        self.places.clear()
-        self.boxes.clear()
+        self.retval = None
 
     def update(self):
         self.screen.fill(self.background)
-        self.hero.update_camera()
-        self.hero.apply_camera(self.all_group)
-        self.all_group.draw(self.screen)
         self.controls_group.draw(self.screen)
-
-    move_directions = {
-        82: (0, -1), 26: (0, -1),
-        79: (1, 0), 7: (1, 0),
-        80: (-1, 0), 4: (-1, 0),
-        81: (0, 1), 22: (0, 1)
-    }
-
-    image_angles = {
-        (-1, 0): 0,
-        (0, -1): 90,
-        (1, 0): 180,
-        (0, 1): 270
-    }
-
-    def key_down_event(self, event):
-        if event.scancode in self.move_directions:
-            self.timer_direction = self.move_directions[event.scancode]
-
-    def key_up_event(self, event):
-        if event.scancode in self.move_directions and self.move_directions[event.scancode] == self.timer_direction:
-            self.timer_direction = None
-
-    def timer_event(self, event):
-        if self.timer_steps and self.steps_direction:
-            direct_x, direct_y = self.steps_direction
-            for obj in self.move_objects:
-                obj.move(direct_x * self.point_size, direct_y * self.point_size)
-            self.timer_steps -= 1
-            if not self.timer_steps:
-                self.move_objects.clear()
-                self.steps_direction = None
-                delivered_count = len(pygame.sprite.groupcollide(self.boxes_group, self.places_group, False, False))
-                if delivered_count == len(self.boxes_group):
-                    if type(self.level).__name__ == "int":
-                        self.clear()
-                        self.level = self.level + 1
-                        self.load_level(self.level)
-                        with open("data/levels/max_level", "r+") as file_level:
-                            max_user_level = int(file_level.readline().rstrip("\n"))
-                            if self.level > max_user_level:
-                                file_level.seek(0, 0)
-                                file_level.write(f"{self.level}")
-                        sleep(0.5)
-                    else:
-                        self.running = False
-                    return
-                self.info_static.set_text(f"Level: {self.level}, Boxes: {delivered_count}/{len(self.boxes_group)}")
-            return
-        if self.timer_direction:
-            direct_x, direct_y = self.timer_direction
-            # self.hero.image = pygame.transform.rotate(self.images["@"], self.image_angles[self.timer_direction])
-            # self.hero.image.set_colorkey((255, 255, 255))
-            self.hero.image = self.hero_image_angles[self.timer_direction]
-            self.hero.move(direct_x * self.cell_len, direct_y * self.cell_len)
-            if pygame.sprite.spritecollideany(self.hero, self.walls_group):
-                self.hero.move(-direct_x * self.cell_len, -direct_y * self.cell_len)
-                return
-            if box_collided := pygame.sprite.spritecollideany(self.hero, self.boxes_group):
-                box_collided.move(direct_x * self.cell_len, direct_y * self.cell_len)
-                if pygame.sprite.spritecollideany(box_collided, self.walls_group) or \
-                        len(pygame.sprite.spritecollide(box_collided, self.boxes_group, False)) > 1:
-                    self.hero.move(-direct_x * self.cell_len, -direct_y * self.cell_len)
-                    box_collided.move(-direct_x * self.cell_len, -direct_y * self.cell_len)
-                    return
-                box_collided.move(-direct_x * self.cell_len, -direct_y * self.cell_len)
-                self.move_objects += [box_collided]
-            self.hero.move(-direct_x * self.cell_len, -direct_y * self.cell_len)
-            self.move_objects += [self.hero]
-            self.timer_steps = self.points_count
-            self.steps_direction = self.timer_direction
 
     def mouse_motion_event(self, event):
         self.cursor.set_pos(*event.pos)
@@ -338,39 +102,43 @@ class Sokoban:
     game_events = {
         pygame.QUIT: lambda _self, event: (
             setattr(_self, "running", False),
-            setattr(_self, "__retval", False)
+            setattr(_self, "retval", "Quit")
         ),
-        pygame.KEYDOWN: key_down_event,
-        pygame.KEYUP: key_up_event,
-        TIMEREVENT: timer_event,
         pygame.MOUSEMOTION: mouse_motion_event,
         pygame.MOUSEBUTTONDOWN: mouse_down_event
     }
 
     def mainloop(self, level: int | str = 0):
-        self.level = level
-        self.load_level(level)
-        self.__retval = True
+        self.retval = level
+        self.running = True
         while self.running:
             for event in pygame.event.get():
                 handler = self.game_events.get(event.type, lambda *args, **kwargs: 0)
                 handler(self, event)
             self.update()
             pygame.display.flip()
-        self.clear()
-        return self.__retval
+        return self.retval
 
 
 app = QApplication(sys.argv)
-# QMessageBox.information(None, "Title", "Here is your informative message")
-# text, okPressed = QInputDialog.getText(None, "Get Text", "Enter your name:", QLineEdit.EchoMode.Normal, "")
-with open("config.json") as fconfig, open("data/levels/max_level") as file_level:
+with open("config.json") as fconfig:
     config = json.load(fconfig)
-    last_user_level = int(file_level.readline().rstrip("\n"))
 pygame.init()
 pygame.display.set_caption("Сокобан")
-pygame.time.set_timer(TIMEREVENT, config["ticks"])
-Game = Sokoban((config["width"], config["height"]), tuple(config["background"]), point_size=config["point_size"],
-               points_count=config["points_count"])
-
-Game.mainloop(level=last_user_level)
+mainScreen = pygame.display.set_mode((config["width"], config["height"]))
+pygame.time.set_timer(Sokoban.TIMEREVENT, config["ticks"])
+menu = Menu((config["width"], config["height"]), tuple(config["background"]), mainScreen,
+                text_size=config["menu_text_size"],
+                active_colors=tuple(map(tuple, config["active_colors"])),
+                base_colors=tuple(map(tuple, config["base_colors"])))
+game = Sokoban((config["width"], config["height"]), tuple(config["background"]), mainScreen,
+               point_size=config["point_size"], points_count=config["points_count"], text_size=config["game_text_size"],
+               active_colors=tuple(map(tuple, config["active_colors"])),
+               base_colors=tuple(map(tuple, config["base_colors"])))
+while True:
+    with open("data/levels/user_level") as file_level:
+        last_user_level = int(file_level.readline().rstrip("\n"))
+    if (menu_level := menu.mainloop(level=last_user_level)) == "Quit":
+        break
+    if not game.mainloop(level=menu_level):
+        break

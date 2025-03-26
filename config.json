@@ -3,5 +3,9 @@
   "background": [0, 0, 0],
   "point_size": 1,
   "points_count": 30,
-  "ticks": 6
+  "ticks": 6,
+  "menu_text_size": 40,
+  "game_text_size": 30,
+  "base_colors": [[175, 187, 185], [87, 67, 43]],
+  "active_colors": [[175, 187, 185], [128, 0, 0]]
 }
