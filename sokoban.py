@@ -4,6 +4,7 @@ from game_objects import *
 from controls import *
 from PyQt6.QtWidgets import QMessageBox
 
+
 class Sokoban:
     TIMEREVENT = pygame.USEREVENT + 1
 
