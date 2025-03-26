@@ -83,7 +83,7 @@ class Sokoban:
         self.button_forward = Button(
             0, 0,
             self.controls_group, self.buttons_group,
-            text=" > ",
+            text=" ⇛ ",
             base_colors=base_colors,
             active_colors=active_colors,
             text_size=text_size,
@@ -102,7 +102,7 @@ class Sokoban:
         self.button_back = Button(
             0, 0,
             self.controls_group, self.buttons_group,
-            text=" < ",
+            text=" ⇚ ",
             base_colors=base_colors,
             active_colors=active_colors,
             text_size=text_size,
