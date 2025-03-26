@@ -1,6 +1,5 @@
 import pygame
 
-
 class Camera:
     # зададим начальный сдвиг камеры
     def __init__(self, map_size):

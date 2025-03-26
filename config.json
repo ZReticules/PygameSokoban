@@ -1,0 +1,7 @@
+{
+  "width": 800, "height": 800,
+  "background": [0, 0, 0],
+  "point_size": 1,
+  "points_count": 30,
+  "ticks": 6
+}
